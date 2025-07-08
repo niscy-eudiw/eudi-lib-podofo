@@ -619,7 +619,7 @@ jobs:
 
       - id: extract
         name: Extract code version from gradle.properties
-        run: echo "CODE_VERSION=$(awk -F= '$1~/version/{print $2}' src/android/gradle.properties)" >> $GITHUB_OUTPUT
+        run: echo "code-version=$(awk -F= '$1~/version/{print $2}' src/android/gradle.properties)" >> $GITHUB_OUTPUT
 
       - name: Upload podofo AAR artifact
         uses: actions/upload-artifact@v4
