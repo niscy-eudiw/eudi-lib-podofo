@@ -371,4 +371,3 @@ github [issues](https://github.com/podofo/podofo/issues) instead.
 PoDoFo is currently developed and maintained by
 [Francesco Pretto](mailto:ceztko@gmail.com), together with Dominik Seichter and others. See the file
 [AUTHORS.md](https://github.com/podofo/podofo/blob/master/AUTHORS.md) for more details.
-
