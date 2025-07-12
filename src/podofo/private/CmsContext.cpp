@@ -32,6 +32,7 @@ static void addAttribute(CMS_SignerInfo* si, int(*addAttributeFun)(CMS_SignerInf
 CmsContext::CmsContext() :
     m_status(CmsContextStatus::Uninitialized),
     m_cert(nullptr),
+    m_chain(nullptr),
     m_cms(nullptr),
     m_signer(nullptr),
     m_databio(nullptr),
@@ -39,13 +40,14 @@ CmsContext::CmsContext() :
 {
 }
 
-void CmsContext::Reset(const bufferview& cert, const CmsContextParams& parameters)
+void CmsContext::Reset(const bufferview& cert, const std::vector<charbuff>& chain, const CmsContextParams& parameters)
 {
     clear();
 
     m_parameters = parameters,
 
     loadX509Certificate(cert);
+    loadX509Chain(chain);
     computeCertificateHash();
 
     reset();
@@ -160,6 +162,32 @@ void CmsContext::loadX509Certificate(const bufferview& cert)
     }
 }
 
+void CmsContext::loadX509Chain(const std::vector<charbuff>& chain)
+{
+    m_chain = sk_X509_new_null();
+    if (m_chain == nullptr)
+        PODOFO_RAISE_ERROR_INFO(PdfErrorCode::OutOfMemory, "sk_X509_new_null");
+
+    for (const auto& certbuff : chain)
+    {
+        auto in = (const unsigned char*)certbuff.data();
+        auto cert = d2i_X509(nullptr, &in, (int)certbuff.size());
+        if (cert == nullptr)
+        {
+            string err("Certificate loading failed. Internal OpenSSL error:\n");
+            ssl::GetOpenSSLError(err);
+            PODOFO_RAISE_ERROR_INFO(PdfErrorCode::OpenSSLError, err);
+        }
+
+        // sk_X509_push will increment the reference count of the certificate
+        if (sk_X509_push(m_chain, cert) == 0)
+        {
+            X509_free(cert);
+            PODOFO_RAISE_ERROR_INFO(PdfErrorCode::OpenSSLError, "sk_X509_push");
+        }
+    }
+}
+
 void CmsContext::computeCertificateHash()
 {
     int len;
@@ -193,6 +221,12 @@ void CmsContext::clear()
         m_cert = nullptr;
     }
 
+    if (m_chain != nullptr)
+    {
+        sk_X509_pop_free(m_chain, X509_free);
+        m_chain = nullptr;
+    }
+
     if (m_cms != nullptr)
     {
         CMS_ContentInfo_free(m_cms);
@@ -215,7 +249,7 @@ void CmsContext::clear()
 void CmsContext::reset()
 {
     // By default CMS_sign uses SHA1, so create a partial context with streaming enabled
-    m_cms = CMS_sign(nullptr, nullptr, nullptr, nullptr, CMS_FLAGS);
+    m_cms = CMS_sign(nullptr, nullptr, m_chain, nullptr, CMS_FLAGS);
     if (m_cms == nullptr)
         PODOFO_RAISE_ERROR_INFO(PdfErrorCode::OutOfMemory, "CMS_sign");
 

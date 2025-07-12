@@ -21,6 +21,7 @@ extern "C"
     struct bio_st;
     struct TS_resp_st;  // Forward declaration for TS_RESP
     struct PKCS7_st;    // Forward declaration for PKCS7
+    struct stack_st_X509;
 }
 
 namespace PoDoFo
@@ -44,13 +45,14 @@ namespace PoDoFo
         CmsContext();
         ~CmsContext();
     public:
-        void Reset(const bufferview& cert, const CmsContextParams& parameters);
+        void Reset(const bufferview& cert, const std::vector<charbuff>& chain, const CmsContextParams& parameters);
         void AppendData(const bufferview& data);
         void ComputeHashToSign(charbuff& hashToSign);
         void ComputeSignature(const bufferview& signedHash, charbuff& signature);
         void AddAttribute(const std::string_view& nid, const bufferview& attr, bool signedAttr, bool octetString);
     private:
         void loadX509Certificate(const bufferview& cert);
+        void loadX509Chain(const std::vector<charbuff>& chain);
         void computeCertificateHash();
         void clear();
         void reset();
@@ -73,6 +75,7 @@ namespace PoDoFo
         CmsContextStatus m_status;
         CmsContextParams m_parameters;
         struct x509_st* m_cert;
+        struct stack_st_X509* m_chain;
         charbuff m_certHash;
         struct CMS_ContentInfo_st* m_cms;
         struct CMS_SignerInfo_st* m_signer;
