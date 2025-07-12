@@ -69,13 +69,13 @@ namespace PoDoFo
          * performing a deferred signing
          */
         PdfSignerCms(const bufferview& cert, const bufferview& pkey,
-            const PdfSignerCmsParams& parameters = { });
+            const std::vector<charbuff>& chain, const PdfSignerCmsParams& parameters = { });
 
         /** Load a X.509 certificate without supplying a private key
          * \param cert ASN.1 DER encoded X.509 certificate
          * \remarks signing can be supplied by a signing service, or performing a deferred signing
          */
-        PdfSignerCms(const bufferview& cert, const PdfSignerCmsParams& parameters = { });
+        PdfSignerCms(const bufferview& cert, const std::vector<charbuff>& chain, const PdfSignerCmsParams& parameters = { });
 
         ~PdfSignerCms();
 
@@ -118,7 +118,8 @@ namespace PoDoFo
         void doSign(const bufferview& input, charbuff& output);
     private:
         nullable<bool> m_deferredSigning;
-        charbuff m_certificate;
+        bufferview m_certificate;
+        std::vector<charbuff> m_chain;
         std::unique_ptr<CmsContext> m_cmsContext;
         struct evp_pkey_st* m_privKey;
         PdfSignerCmsParams m_parameters;

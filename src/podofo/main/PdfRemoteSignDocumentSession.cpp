@@ -103,7 +103,6 @@ std::string PdfRemoteSignDocumentSession::beginSigning() {
             _cmsParams.SignatureType = PdfSignatureType::PAdES_B_T;
         }
         else if (_conformanceLevel == "ADES_B_LT") {
-            throw runtime_error("Conformance level ADES_B_LT is not supported yet");
             _cmsParams.SignatureType = PdfSignatureType::PAdES_B_LT;
         }
         else if (_conformanceLevel == "ADES_B_LTA") {
@@ -127,7 +126,11 @@ std::string PdfRemoteSignDocumentSession::beginSigning() {
             throw runtime_error("Hash algorithm is not supported");
         }
 
-        _signer = make_shared<PdfSignerCms>(cert, _cmsParams);
+        std::vector<charbuff> chain;
+        for (const auto& cert : _certificateChainDer)
+            chain.emplace_back(reinterpret_cast<const char*>(cert.data()), cert.size());
+
+        _signer = make_shared<PdfSignerCms>(cert, chain, _cmsParams);
         _signer->ReserveAttributeSize(17000);
         _signerId = _ctx.AddSigner(signature, _signer);  // I want to pass the signer as reference object
 
@@ -160,7 +163,7 @@ std::string PdfRemoteSignDocumentSession::beginSigning() {
 }
 //TODO base64Tsr MUST BE OPTIONAL
 // finishSigning()
-void PdfRemoteSignDocumentSession::finishSigning(const string& signedHash, const string& base64Tsr) {
+void PdfRemoteSignDocumentSession::finishSigning(const string& signedHash, const string& base64Tsr, const std::optional<ValidationData>& validationData) {
     try {
         cout << "\n=== Finishing Signing Process ===" << endl;
         cout << "signedHash" << signedHash  <<endl;
@@ -179,6 +182,23 @@ void PdfRemoteSignDocumentSession::finishSigning(const string& signedHash, const
 
         }
         _ctx.FinishSigning(_results);
+        cout << "Basic signature completed" << endl;
+
+
+        if (_conformanceLevel == "ADES_B_LT" && validationData.has_value()) {
+			cout << "Creating DSS catalog for PAdES-B-LT..." << endl;
+
+			PdfMemDocument dss_doc;
+			_stream->Seek(0, SeekDirection::Begin);
+			dss_doc.Load(_stream);
+
+			createDSSCatalog(dss_doc, *validationData);
+
+			// Save incremental update with DSS, disabling automatic stream compression
+			dss_doc.SaveUpdate(*_stream, PdfSaveOptions::NoMetadataUpdate | PdfSaveOptions::NoFlateCompress);
+			cout << "DSS catalog added via incremental update" << endl;
+		}
+
         cout << "=== Signing Process Completed Successfully ===\n" << endl;
     }
     catch (const exception& e) {
@@ -460,5 +480,93 @@ const char* PdfRemoteSignDocumentSession::hashAlgorithmToString(HashAlgorithm al
     case HashAlgorithm::SHA512: return "SHA-512";
     default:                    return "Unknown";
     }
+}
+
+void PdfRemoteSignDocumentSession::createDSSCatalog(PdfMemDocument& doc, const ValidationData& validationData) {
+	// Get the document catalog
+	auto& catalog = doc.GetCatalog();
+
+	// Create DSS dictionary
+	auto& dssObj = doc.GetObjects().CreateDictionaryObject();
+	auto& dssDict = dssObj.GetDictionary();
+
+	// Create certificate array
+	if (!validationData.certificatesBase64.empty()) {
+		PdfArray certsArray;
+		for (const auto& certBase64 : validationData.certificatesBase64) {
+			auto& certStream = createCertificateStream(doc, certBase64);
+			certsArray.Add(certStream.GetIndirectReference());
+		}
+		dssDict.AddKey("Certs"_n, certsArray);
+	}
+
+	// Create CRL array
+	if (!validationData.crlsBase64.empty()) {
+		PdfArray crlsArray;
+		for (const auto& crlBase64 : validationData.crlsBase64) {
+			auto& crlStream = createCRLStream(doc, crlBase64);
+			crlsArray.Add(crlStream.GetIndirectReference());
+		}
+		dssDict.AddKey("CRLs"_n, crlsArray);
+	}
+
+	// Create OCSP array (if provided)
+	if (!validationData.ocspsBase64.empty()) {
+		PdfArray ocspsArray;
+		for (const auto& ocspBase64 : validationData.ocspsBase64) {
+			auto& ocspStream = createOCSPStream(doc, ocspBase64);
+			ocspsArray.Add(ocspStream.GetIndirectReference());
+		}
+		dssDict.AddKey("OCSPs"_n, ocspsArray);
+	}
+
+	// Add DSS to catalog
+	catalog.GetDictionary().AddKey("DSS"_n, dssObj.GetIndirectReference());
+}
+
+PdfObject& PdfRemoteSignDocumentSession::createCertificateStream(PdfMemDocument& doc, const std::string& certBase64) {
+	// Decode base64 certificate
+	std::vector<unsigned char> certDer = ConvertBase64PEMtoDER(certBase64, std::nullopt);
+
+	// Create stream object
+	auto& streamObj = doc.GetObjects().CreateDictionaryObject();
+	auto& stream = streamObj.GetOrCreateStream();
+
+	// Set the certificate data
+	charbuff certData;
+	certData.assign(reinterpret_cast<const char*>(certDer.data()), certDer.size());
+	stream.SetData(certData, {}, true);
+
+	return streamObj;
+}
+
+PdfObject& PdfRemoteSignDocumentSession::createCRLStream(PdfMemDocument& doc, const std::string& crlBase64) {
+	// Decode base64 CRL
+	std::vector<unsigned char> crlDer = ConvertBase64PEMtoDER(crlBase64, std::nullopt);
+
+	// Create stream object
+	auto& streamObj = doc.GetObjects().CreateDictionaryObject();
+	auto& stream = streamObj.GetOrCreateStream();
+
+	// Set the CRL data
+	charbuff crlData;
+	crlData.assign(reinterpret_cast<const char*>(crlDer.data()), crlDer.size());
+	stream.SetData(crlData, {}, true);
+
+	return streamObj;
+}
+
+PdfObject& PdfRemoteSignDocumentSession::createOCSPStream(PdfMemDocument& doc, const std::string& ocspBase64) {
+	// Similar implementation for OCSP responses
+	std::vector<unsigned char> ocspDer = ConvertBase64PEMtoDER(ocspBase64, std::nullopt);
+
+	auto& streamObj = doc.GetObjects().CreateDictionaryObject();
+	auto& stream = streamObj.GetOrCreateStream();
+
+	charbuff ocspData;
+	ocspData.assign(reinterpret_cast<const char*>(ocspDer.data()), ocspDer.size());
+	stream.SetData(ocspData, {}, true);
+
+	return streamObj;
 }
 
