@@ -106,7 +106,6 @@ std::string PdfRemoteSignDocumentSession::beginSigning() {
             _cmsParams.SignatureType = PdfSignatureType::PAdES_B_LT;
         }
         else if (_conformanceLevel == "ADES_B_LTA") {
-            throw runtime_error("Conformance level ADES_B_LTA is not supported yet");
             _cmsParams.SignatureType = PdfSignatureType::PAdES_B_LTA;
         }
         else {
@@ -568,5 +567,39 @@ PdfObject& PdfRemoteSignDocumentSession::createOCSPStream(PdfMemDocument& doc, c
 	stream.SetData(ocspData, {}, true);
 
 	return streamObj;
+}
+
+
+
+std::string PdfRemoteSignDocumentSession::beginSigningLTA() {
+    try
+    {
+        throw std::runtime_error("beginSigningLTA - Not implemented");
+
+        std::cout << "\n=== Starting LTA Upgrade Process ===" << std::endl;
+        auto base64Hash = "some_base64_hash"; // Placeholder for actual hash
+        return base64Hash;
+    }
+    catch (const std::exception& e)
+    {
+        std::cout << "\n=== Error in beginSigningLTA ===" << std::endl;
+        std::cout << "Error: " << e.what() << std::endl;
+        throw;
+    }
+}
+
+void PdfRemoteSignDocumentSession::finishSigningLTA(const std::string& base64Tsr)
+{
+    try
+    {
+        std::cout << "\n=== Finishing LTA Upgrade Process ===" << std::endl;
+        throw std::runtime_error("finishSigningLTA - Not implemented");
+    }
+    catch (const std::exception& e)
+    {
+        std::cout << "\n=== Error in finishSigningLTA ===" << std::endl;
+        std::cout << "Error: " << e.what() << std::endl;
+        throw;
+    }
 }
 

@@ -35,11 +35,57 @@ namespace PoDoFo {
     };
     using BioPtr = std::unique_ptr<BIO, BioFreeAll>;
 
-    struct ValidationData {
-		std::vector<std::string> certificatesBase64;
-		std::vector<std::string> crlsBase64;
-		std::vector<std::string> ocspsBase64;
-	};
+    class ValidationData {
+    public:
+        ValidationData() = default;
+
+        ValidationData(const std::vector<std::string>& certificates,
+                      const std::vector<std::string>& crls = {},
+                      const std::vector<std::string>& ocsps = {})
+            : certificatesBase64(certificates), crlsBase64(crls), ocspsBase64(ocsps) {}
+
+        void addCertificate(const std::string& certBase64) {
+            certificatesBase64.push_back(certBase64);
+        }
+
+        void addCRL(const std::string& crlBase64) {
+            crlsBase64.push_back(crlBase64);
+        }
+
+        void addOCSP(const std::string& ocspBase64) {
+            ocspsBase64.push_back(ocspBase64);
+        }
+
+        void addCertificates(const std::vector<std::string>& certs) {
+            certificatesBase64.insert(certificatesBase64.end(), certs.begin(), certs.end());
+        }
+
+        void addCRLs(const std::vector<std::string>& crls) {
+            crlsBase64.insert(crlsBase64.end(), crls.begin(), crls.end());
+        }
+
+        void addOCSPs(const std::vector<std::string>& ocsps) {
+            ocspsBase64.insert(ocspsBase64.end(), ocsps.begin(), ocsps.end());
+        }
+
+        void clear() {
+            certificatesBase64.clear();
+            crlsBase64.clear();
+            ocspsBase64.clear();
+        }
+
+        bool empty() const {
+            return certificatesBase64.empty() && crlsBase64.empty() && ocspsBase64.empty();
+        }
+
+        size_t certificateCount() const { return certificatesBase64.size(); }
+        size_t crlCount() const { return crlsBase64.size(); }
+        size_t ocspCount() const { return ocspsBase64.size(); }
+
+        std::vector<std::string> certificatesBase64;
+        std::vector<std::string> crlsBase64;
+        std::vector<std::string> ocspsBase64;
+    };
 
     enum class HashAlgorithm {
         SHA256,
@@ -89,6 +135,10 @@ namespace PoDoFo {
 
         std::string beginSigning();
         void finishSigning(const std::string& signedHash, const std::string& base64Tsr, const std::optional<ValidationData>& validationData = std::nullopt);
+
+        std::string beginSigningLTA();
+        void finishSigningLTA(const std::string& base64Tsr);
+
         void printState() const;
         void setTimestampToken(const std::string& responseTsrBase64);
 
