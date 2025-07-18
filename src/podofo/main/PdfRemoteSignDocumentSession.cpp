@@ -414,6 +414,93 @@ void PdfRemoteSignDocumentSession::printState() const {
         cout << "  TimestampToken:   " << _responseTsr.size() << " bytes\n";
 }
 
+std::string PdfRemoteSignDocumentSession::getCrlFromCertificate(const std::string& base64Cert) {
+    auto base64_decode = [](const std::string& base64_string) -> std::vector<unsigned char> {
+        std::unique_ptr<BIO, decltype(&BIO_free)> b64(BIO_new(BIO_f_base64()), BIO_free);
+        if (!b64) throw std::runtime_error("Failed to create BIO for base64 decoding.");
+        BIO_set_flags(b64.get(), BIO_FLAGS_BASE64_NO_NL);
+        std::unique_ptr<BIO, decltype(&BIO_free)> bmem(BIO_new_mem_buf(base64_string.data(), static_cast<int>(base64_string.length())), BIO_free);
+        if (!bmem) throw std::runtime_error("Failed to create BIO_mem_buf for base64 decoding.");
+        BIO* bio = BIO_push(b64.get(), bmem.get());
+
+        std::vector<unsigned char> decoded_data(base64_string.length());
+        int decoded_length = BIO_read(bio, decoded_data.data(), static_cast<int>(decoded_data.size()));
+        if (decoded_length <= 0) throw std::runtime_error("Failed to decode base64 input.");
+        decoded_data.resize(decoded_length);
+        return decoded_data;
+        };
+
+    std::vector<unsigned char> decoded = base64_decode(base64Cert);
+    if (decoded.size() < 50) {
+        throw std::runtime_error("Decoded data too small to be valid X.509 or timestamp.");
+    }
+
+    const unsigned char* p = decoded.data();
+    std::unique_ptr<X509, decltype(&X509_free)> cert(
+        d2i_X509(nullptr, &p, decoded.size()), X509_free);
+
+    if (!cert) {
+        // Not an X.509 cert: try TimeStampResp first
+        p = decoded.data();
+        std::unique_ptr<TS_RESP, decltype(&TS_RESP_free)> ts_resp(
+            d2i_TS_RESP(nullptr, &p, decoded.size()), TS_RESP_free);
+        if (!ts_resp) {
+            throw std::runtime_error("Failed to parse DER as X.509 certificate or TimeStampResp.");
+        }
+
+        PKCS7* pkcs7 = TS_RESP_get_token(ts_resp.get());
+        if (!pkcs7) {
+            throw std::runtime_error("TimeStampResp does not contain a timeStampToken.");
+        }
+
+        if (!PKCS7_type_is_signed(pkcs7) || !pkcs7->d.sign || !pkcs7->d.sign->cert) {
+            throw std::runtime_error("timeStampToken does not contain signer certificate.");
+        }
+
+        STACK_OF(X509)* certs = pkcs7->d.sign->cert;
+        if (sk_X509_num(certs) < 1) {
+            throw std::runtime_error("No certificates found in timeStampToken.");
+        }
+
+        cert.reset(X509_dup(sk_X509_value(certs, 0)));
+        if (!cert) {
+            throw std::runtime_error("Failed to duplicate signer certificate from timeStampToken.");
+        }
+    }
+
+    if (!X509_get_subject_name(cert.get()) || !X509_get_issuer_name(cert.get())) {
+        throw std::runtime_error("Parsed certificate structure is invalid.");
+    }
+
+    std::unique_ptr<CRL_DIST_POINTS, decltype(&CRL_DIST_POINTS_free)> dist_points(
+        static_cast<CRL_DIST_POINTS*>(X509_get_ext_d2i(cert.get(), NID_crl_distribution_points, nullptr, nullptr)),
+        CRL_DIST_POINTS_free
+    );
+
+    if (dist_points) {
+        for (int i = 0; i < sk_DIST_POINT_num(dist_points.get()); ++i) {
+            DIST_POINT* dp = sk_DIST_POINT_value(dist_points.get(), i);
+            if (dp && dp->distpoint && dp->distpoint->type == 0) {  // fullName
+                GENERAL_NAMES* names = dp->distpoint->name.fullname;
+                for (int j = 0; j < sk_GENERAL_NAME_num(names); ++j) {
+                    GENERAL_NAME* gen_name = sk_GENERAL_NAME_value(names, j);
+                    if (gen_name && gen_name->type == GEN_URI) {
+                        ASN1_IA5STRING* uri = gen_name->d.uniformResourceIdentifier;
+                        if (uri && ASN1_STRING_length(uri) > 0) {
+                            std::string crl_url(reinterpret_cast<const char*>(ASN1_STRING_get0_data(uri)), ASN1_STRING_length(uri));
+                            if (!crl_url.empty()) {
+                                std::cout << "Extracted CRL URL: " << crl_url << std::endl;
+                                return crl_url;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    throw std::runtime_error("No CRL distribution point URL found in certificate.");
+}
 
 std::string PdfRemoteSignDocumentSession::DecodeBase64Tsr(const std::string& base64Tsr) {
     // Create a BIO chain for base64 decoding

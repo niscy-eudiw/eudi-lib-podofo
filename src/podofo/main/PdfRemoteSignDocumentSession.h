@@ -141,6 +141,7 @@ namespace PoDoFo {
 
         void printState() const;
         void setTimestampToken(const std::string& responseTsrBase64);
+        std::string getCrlFromCertificate(const std::string& base64Cert);
 
     private:
         void createDSSCatalog(PdfMemDocument& doc, const ValidationData& validationData);

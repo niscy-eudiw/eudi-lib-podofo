@@ -40,8 +40,13 @@ int main()
 
         session.finishSigning(signedHash, tsr, validationData);
 
+        auto result = session.getCrlFromCertificate(my_end);
+        cout << "result: " << result << endl;
+
         auto lta_hash = session.beginSigningLTA();
         cout << "LTA hash: " << lta_hash << endl;
+
+        
         std::string base64Tsr = "MIINJTTQ==";
 
         session.finishSigningLTA(base64Tsr);
