@@ -87,6 +87,15 @@ NS_ASSUME_NONNULL_BEGIN
  */
 - (BOOL)finishSigningLTAWithTSR:(NSString *)tsr error:(NSError **)error;
 
+/**
+ * Extracts the CRL distribution point URL from a base64 encoded certificate.
+ *
+ * @param base64Cert The base64 encoded certificate.
+ * @param error On input, a pointer to an error object. If an error occurs, this pointer is set to an actual error object containing the error information.
+ * @return The CRL URL as a string, or nil if an error occurred.
+ */
+- (nullable NSString *)getCrlFromCertificate:(NSString *)base64Cert error:(NSError **)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -175,15 +175,6 @@ NSString *const PodofoSignerErrorDomain = @"org.podofo.PodofoSigner";
         return NO;
     }
 
-    if (tsr == nil) {
-        if (error) {
-            *error = [NSError errorWithDomain:PodofoSignerErrorDomain
-                                         code:103
-                                     userInfo:@{NSLocalizedDescriptionKey: @"TSR cannot be nil"}];
-        }
-        return NO;
-    }
-
     try {
         _nativeSession->finishSigningLTA([tsr UTF8String]);
         return YES;
@@ -194,6 +185,29 @@ NSString *const PodofoSignerErrorDomain = @"org.podofo.PodofoSigner";
                                      userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithUTF8String:e.what()]}];
         }
         return NO;
+    }
+}
+
+- (nullable NSString *)getCrlFromCertificate:(NSString *)base64Cert error:(NSError **)error {
+    if (_nativeSession == NULL) {
+        if (error) {
+            *error = [NSError errorWithDomain:PodofoSignerErrorDomain
+                                         code:101
+                                     userInfo:@{NSLocalizedDescriptionKey: @"Session not initialized"}];
+        }
+        return nil;
+    }
+
+    try {
+        std::string crlUrlStr = _nativeSession->getCrlFromCertificate([base64Cert UTF8String]);
+        return [NSString stringWithUTF8String:crlUrlStr.c_str()];
+    } catch (const std::exception& e) {
+        if (error) {
+            *error = [NSError errorWithDomain:PodofoSignerErrorDomain
+                                         code:102
+                                     userInfo:@{NSLocalizedDescriptionKey: [NSString stringWithUTF8String:e.what()]}];
+        }
+        return nil;
     }
 }
 
