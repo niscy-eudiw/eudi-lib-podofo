@@ -88,7 +88,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/ios/libpng/install
-          key: deps-ios-libpng-${{ env.LIBPNG_VERSION }}
+          key: deps-ios-libpng-${{ env.LIBPNG_VERSION }}-v4
 
       - name: Download and extract libpng
         if: steps.cache-ios-libpng.outputs.cache-hit != 'true'
@@ -125,7 +125,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/ios/libxml2/install
-          key: deps-ios-libxml2-${{ env.LIBXML2_VERSION }}
+          key: deps-ios-libxml2-${{ env.LIBXML2_VERSION }}-v4
 
       - name: Checkout libxml2 source code
         uses: actions/checkout@v4
@@ -168,7 +168,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/ios/openssl/install
-          key: deps-ios-openssl-${{ env.OPENSSL_VERSION }}
+          key: deps-ios-openssl-${{ env.OPENSSL_VERSION }}-v4
 
       - name: Download and extract openssl
         if: steps.cache-ios-openssl.outputs.cache-hit != 'true'
@@ -205,7 +205,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build/ios/zlib/install
-          key: deps-ios-zlib-${{ env.ZLIB_VERSION }}
+          key: deps-ios-zlib-${{ env.ZLIB_VERSION }}-v4
 
       - name: Download and extract zlib
         if: steps.cache-ios-zlib.outputs.cache-hit != 'true'

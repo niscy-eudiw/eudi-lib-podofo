@@ -12,7 +12,7 @@
 #    OS = iphoneos
 #    SIMULATOR = iphonesimulator
 #
-# DEPLOYMENT_TARGET: (default 16.5)
+# DEPLOYMENT_TARGET: (default 14.0)
 #    The minimum iOS version to target
 #
 # ARCHS: (default "$(ARCHS_STANDARD)")

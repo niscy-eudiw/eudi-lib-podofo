@@ -81,7 +81,7 @@ function build() {
     cat > "$BUILD_DIR/ios.toolchain.cmake" << EOF
 set(CMAKE_SYSTEM_NAME iOS)
 set(CMAKE_OSX_ARCHITECTURES \${ARCH})
-set(CMAKE_OSX_DEPLOYMENT_TARGET \${DEPLOYMENT_TARGET})
+set(CMAKE_OSX_DEPLOYMENT_TARGET 14.0)
 set(CMAKE_XCODE_ATTRIBUTE_ONLY_ACTIVE_ARCH NO)
 set(CMAKE_IOS_INSTALL_COMBINED NO)
 set(CMAKE_SYSTEM_PROCESSOR \${ARCH})
@@ -129,7 +129,7 @@ EOF
             -DCMAKE_INSTALL_PREFIX="$install_dir" \
             -DCMAKE_BUILD_TYPE=Release \
             -DARCH="$arch" \
-            -DDEPLOYMENT_TARGET="$MIN_IOS_VERSION" \
+            -DDEPLOYMENT_TARGET="14.0" \
             -DSDK_PATH="$SDK_PATH" \
             -DPNG_SHARED=OFF \
             -DPNG_TESTS=OFF
