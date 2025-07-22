@@ -224,7 +224,7 @@ EOF
             -fobjc-arc \
             -fmodules \
             -fobjc-abi-version=2 \
-            -fobjc-runtime=ios-16.5 \
+            -fobjc-runtime=ios-${MIN_IOS_VERSION} \
             -std=c++17 \
             -stdlib=libc++ \
             -I$(xcrun --sdk "${platform}" --show-sdk-path)/usr/include/c++/v1
@@ -299,7 +299,7 @@ EOF
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>MinimumOSVersion</key>
-    <string>16.5</string>
+    <string>${MIN_IOS_VERSION}</string>
 </dict>
 </plist>
 EOF
