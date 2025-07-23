@@ -209,6 +209,7 @@ EOF
     compilePodofoWrapper() {
         local platform=$1
         local arch=$2
+        local sim_suffix=$3
 
         # Compile PodofoWrapper class
         echo "Compiling PodofoWrapper class for ($platform/$arch)..."
@@ -224,14 +225,15 @@ EOF
             -fobjc-arc \
             -fmodules \
             -fobjc-abi-version=2 \
-            -fobjc-runtime=ios-16.5 \
+            -fobjc-runtime=ios-${MIN_IOS_VERSION} \
+            -mios-simulator-version-min=14 \
             -std=c++17 \
             -stdlib=libc++ \
             -I$(xcrun --sdk "${platform}" --show-sdk-path)/usr/include/c++/v1
     }
 
-    compilePodofoWrapper "iphoneos" "arm64"
-    compilePodofoWrapper "iphonesimulator" "arm64"
+    compilePodofoWrapper "iphoneos" "arm64" ""
+    compilePodofoWrapper "iphonesimulator" "arm64" "-simulator"
 
     # Copy PodofoWrapper header to framework
     cp "${SOURCE_DIR}/scripts/ios/podofo/PodofoWrapper.h" "${DEVICE_FRAMEWORK_DIR}/Headers/"
@@ -299,7 +301,7 @@ EOF
     <key>CFBundleVersion</key>
     <string>1</string>
     <key>MinimumOSVersion</key>
-    <string>16.5</string>
+    <string>${MIN_IOS_VERSION}</string>
 </dict>
 </plist>
 EOF

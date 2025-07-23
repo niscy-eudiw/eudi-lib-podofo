@@ -12,7 +12,7 @@
 #    OS = iphoneos
 #    SIMULATOR = iphonesimulator
 #
-# DEPLOYMENT_TARGET: (default 16.5)
+# DEPLOYMENT_TARGET: (default 14.0)
 #    The minimum iOS version to target
 #
 # ARCHS: (default "$(ARCHS_STANDARD)")
@@ -25,7 +25,7 @@ set(CMAKE_SYSTEM_PROCESSOR arm64)
 set(CMAKE_CROSSCOMPILING TRUE)
 set(CMAKE_C_COMPILER_WORKS TRUE)
 set(CMAKE_CXX_COMPILER_WORKS TRUE)
-set(DEPLOYMENT_TARGET "16.5")
+set(DEPLOYMENT_TARGET "14.0")
 
 # Get the Xcode version
 execute_process(COMMAND xcodebuild -version

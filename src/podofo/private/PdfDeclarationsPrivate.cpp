@@ -1247,26 +1247,16 @@ void utls::FormatTo(string& str, unsigned long long value)
 
 void utls::FormatTo(string& str, float value, unsigned short precision)
 {
-    // The default size should be large enough to format all
-    // numbers with fixed notation. See https://stackoverflow.com/a/52045523/213871
-    str.resize(FloatFormatDefaultSize);
-    auto result = std::to_chars(str.data(), str.data() + FloatFormatDefaultSize, value, chars_format::fixed, precision);
-    removeTrailingZeroes(str, result.ptr - str.data());
+    char buffer[64];
+    int len = snprintf(buffer, sizeof(buffer), "%.*f", precision, value);
+    str.assign(buffer, len);
 }
 
 void utls::FormatTo(string& str, double value, unsigned short precision)
 {
-    str.resize(FloatFormatDefaultSize);
-    auto result = std::to_chars(str.data(), str.data() + FloatFormatDefaultSize, value, chars_format::fixed, precision);
-    if (result.ec == errc::value_too_large)
-    {
-        // See https://stackoverflow.com/a/52045523/213871
-        // 24 recommended - 5 (unnecessary) exponent = 19
-        constexpr unsigned DoubleFormatDefaultSize = 19;
-        str.resize(DoubleFormatDefaultSize);
-        result = std::to_chars(str.data(), str.data() + DoubleFormatDefaultSize, value, chars_format::fixed, precision);
-    }
-    removeTrailingZeroes(str, result.ptr - str.data());
+    char buffer[64];
+    int len = snprintf(buffer, sizeof(buffer), "%.*f", precision, value);
+    str.assign(buffer, len);
 }
 
 // NOTE: This is clearly limited, since it's supporting only ASCII
