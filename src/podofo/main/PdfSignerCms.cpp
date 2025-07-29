@@ -14,14 +14,15 @@ using namespace PoDoFo;
 
 constexpr unsigned RSASignedHashSize = 256;
 
-PdfSignerCms::PdfSignerCms(const bufferview& cert, const PdfSignerCmsParams& parameters) :
-    PdfSignerCms(cert, { }, parameters)
+PdfSignerCms::PdfSignerCms(const bufferview& cert, const std::vector<charbuff>& chain, const PdfSignerCmsParams& parameters) :
+    PdfSignerCms(cert, { }, chain, parameters)
 {
 }
 
 PdfSignerCms::PdfSignerCms(const bufferview& cert, const bufferview& pkey,
-        const PdfSignerCmsParams& parameters) :
+        const std::vector<charbuff>& chain, const PdfSignerCmsParams& parameters) :
     m_certificate(cert),
+    m_chain(chain),
     m_privKey(nullptr),
     m_parameters(parameters),
     m_reservedSize(0)
@@ -102,6 +103,9 @@ void PdfSignerCms::ComputeSignatureDeferred(const bufferview& processedResult, c
         if (!m_timestampToken.empty() && m_parameters.SignatureType == PdfSignatureType::PAdES_B_T) {
             m_cmsContext->AddAttribute("1.2.840.113549.1.9.16.2.14", m_timestampToken, false, true);  // Custom OID
         }
+        else if (!m_timestampToken.empty() && m_parameters.SignatureType == PdfSignatureType::PAdES_B_LT) {
+            m_cmsContext->AddAttribute("1.2.840.113549.1.9.16.2.14", m_timestampToken, false, true);  // Custom OID
+        }
         m_cmsContext->ComputeSignature(processedResult, contents);
     }
 }
@@ -132,6 +136,8 @@ string PdfSignerCms::GetSignatureSubFilter() const
         case PdfSignatureType::PAdES_B:
             return "ETSI.CAdES.detached";
         case PdfSignatureType::PAdES_B_T:
+            return "ETSI.CAdES.detached";
+        case PdfSignatureType::PAdES_B_LT:
             return "ETSI.CAdES.detached";
         case PdfSignatureType::Pkcs7:
             return "adbe.pkcs7.detached";
@@ -238,6 +244,11 @@ void PdfSignerCms::resetContext()
             params.SkipWriteMIMECapabilities = true;
             params.SkipWriteSigningTime = true;
             break;
+        case PdfSignatureType::PAdES_B_LT:
+            params.AddSigningCertificateV2 = true;
+            params.SkipWriteMIMECapabilities = true;
+            params.SkipWriteSigningTime = true;
+            break;
         case PdfSignatureType::Pkcs7:
             params.AddSigningCertificateV2 = false;
             params.SkipWriteMIMECapabilities = false;
@@ -254,7 +265,7 @@ void PdfSignerCms::resetContext()
     else
         params.DoWrapDigest = true; // We just perform encryption with private key, so we expect the digest wrapped
 
-    m_cmsContext->Reset(m_certificate, params);
+    m_cmsContext->Reset(m_certificate, m_chain, params);
 }
 
 void PdfSignerCms::doSign(const bufferview& input, charbuff& output)
