@@ -103,13 +103,18 @@ function build() {
 
         mkdir -p "$install_dir"
 
-        # Handle devide and simulator paths
+        # Handle device and simulator paths
         if [ "$platform" == "iphoneos" ]; then
             sim_suffix=""
             libft_suffix=""
+            openssl_suffix=""
         else
-            sim_suffix="_x86_64-simulator"
+            # Different dependencies use different naming conventions:
+            # - OpenSSL uses ios-arm64_x86_64-simulator (manually created)
+            # - Others use ios-arm64-simulator (created by xcodebuild)
+            sim_suffix="-simulator"
             libft_suffix="_simulator"
+            openssl_suffix="_x86_64-simulator"
         fi
 
         # Base CMake arguments common to all platforms
@@ -134,27 +139,46 @@ function build() {
             "-DENABLE_VISIBILITY=OFF"
             "-DENABLE_STRICT_TRY_COMPILE=OFF"
             "-DARCHS=${arch}"
-            "-DZLIB_INCLUDE_DIR=${ZLIB_DIR}/xcframework/zlib.xcframework/ios-${arch}${sim_suffix}/Headers"
+            "-DCMAKE_POLICY_DEFAULT_CMP0111=NEW"
+            "-Wno-dev"
+            "-DZLIB_INCLUDE_DIR=${ZLIB_DIR}/xcframework/zlib.xcframework/ios-arm64/Headers"
             "-DZLIB_LIBRARY=${ZLIB_DIR}/xcframework/zlib.xcframework/ios-${arch}${sim_suffix}/libz.a"
             "-DOPENSSL_ROOT_DIR=${OPENSSL_DIR}/xcframework"
-            "-DOPENSSL_INCLUDE_DIR=${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-${arch}${sim_suffix}/Headers"
-            "-DOPENSSL_SSL_LIBRARY=${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-${arch}${sim_suffix}/libssl.a"
-            "-DOPENSSL_CRYPTO_LIBRARY=${OPENSSL_DIR}/xcframework/Crypto.xcframework/ios-${arch}${sim_suffix}/libcrypto.a"
-            "-DOPENSSL_LIBRARIES=${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-${arch}${sim_suffix}/libssl.a;${OPENSSL_DIR}/xcframework/Crypto.xcframework/ios-${arch}${sim_suffix}/libcrypto.a"
-            "-DFREETYPE_INCLUDE_DIRS=${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-${arch}${sim_suffix}/Headers"
+            "-DOPENSSL_INCLUDE_DIR=${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-arm64/Headers"
+            "-DOPENSSL_SSL_LIBRARY=${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-${arch}${openssl_suffix}/libssl.a"
+            "-DOPENSSL_CRYPTO_LIBRARY=${OPENSSL_DIR}/xcframework/Crypto.xcframework/ios-${arch}${openssl_suffix}/libcrypto.a"
+            "-DOPENSSL_LIBRARIES=${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-${arch}${openssl_suffix}/libssl.a;${OPENSSL_DIR}/xcframework/Crypto.xcframework/ios-${arch}${openssl_suffix}/libcrypto.a"
+            "-DFREETYPE_INCLUDE_DIRS=${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64/Headers"
             "-DFREETYPE_LIBRARY=${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-${arch}${sim_suffix}/libfreetype.a"
-            "-DLIBXML2_INCLUDE_DIR=${LIBXML2_DIR}/xcframework/libxml2.xcframework/ios-${arch}${sim_suffix}/libxml2.framework/Headers"
+            "-DLIBXML2_INCLUDE_DIR=${LIBXML2_DIR}/xcframework/libxml2.xcframework/ios-arm64/libxml2.framework/Headers"
             "-DLIBXML2_LIBRARIES=${LIBXML2_DIR}/xcframework/libxml2.xcframework/ios-${arch}${sim_suffix}/libxml2.framework/libxml2"
-            "-DPNG_PNG_INCLUDE_DIR=${LIBPNG_DIR}/xcframework/libpng.xcframework/ios-${arch}${sim_suffix}/Headers"
-            "-DPNG_LIBRARY=${LIBPNG_DIR}/xcframework/libpng.xcframework/ios-${arch}${sim_suffix}/libpng16.a"
         )
 
         echo "Running CMake with arguments: ${CMAKE_ARGS[@]}"
-        cmake -S "${SOURCE_DIR}" "${CMAKE_ARGS[@]}"
+        
+        # Create a custom FindPNG.cmake that properly sets the target
+        mkdir -p cmake_modules
+        cat > cmake_modules/FindPNG.cmake << EOF
+# Custom FindPNG.cmake for iOS XCFramework
+set(PNG_FOUND TRUE)
+set(PNG_INCLUDE_DIRS "${LIBPNG_DIR}/xcframework/libpng.xcframework/ios-arm64/Headers")
+set(PNG_LIBRARIES "${LIBPNG_DIR}/xcframework/libpng.xcframework/ios-${arch}${sim_suffix}/libpng16.a")
+set(PNG_LIBRARY "\${PNG_LIBRARIES}")
+
+if(NOT TARGET PNG::PNG)
+    add_library(PNG::PNG STATIC IMPORTED)
+    set_target_properties(PNG::PNG PROPERTIES
+        IMPORTED_LOCATION "\${PNG_LIBRARIES}"
+        INTERFACE_INCLUDE_DIRECTORIES "\${PNG_INCLUDE_DIRS}"
+    )
+endif()
+EOF
+        
+        cmake -S "${SOURCE_DIR}" "${CMAKE_ARGS[@]}" -DCMAKE_MODULE_PATH="${PWD}/cmake_modules"
         cmake --build . --config Release
         cmake --install .
 
-        cp -R "${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-${arch}${sim_suffix}/Headers/openssl" "${INSTALL_DIR}/${platform}-${arch}/include/"
+        cp -R "${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-arm64/Headers/openssl" "${INSTALL_DIR}/${platform}-${arch}/include/"
     }
 
     # Build for device
@@ -214,19 +238,27 @@ EOF
         # Compile PodofoWrapper class
         echo "Compiling PodofoWrapper class for ($platform/$arch)..."
 
+        # Set the correct minimum version flag based on platform
+        local min_version_flag
+        if [ "$platform" == "iphoneos" ]; then
+            min_version_flag="-mios-version-min=${MIN_IOS_VERSION}"
+        else
+            min_version_flag="-mios-simulator-version-min=${MIN_IOS_VERSION}"
+        fi
+
         clang++ -c "${SOURCE_DIR}/scripts/ios/podofo/PodofoWrapper.mm" \
             -o "${INSTALL_DIR}/${platform}-${arch}/PodofoWrapper.o" \
             -I"${SOURCE_DIR}" \
             -I"${INSTALL_DIR}/${platform}-${arch}/include" \
-            -I"${LIBPNG_DIR}/xcframework/libpng.xcframework/ios-${arch}${sim_suffix}/Headers" \
-            -I"${ZLIB_DIR}/xcframework/zlib.xcframework/ios-${arch}${sim_suffix}/Headers" \
+            -I"${LIBPNG_DIR}/xcframework/libpng.xcframework/ios-arm64/Headers" \
+            -I"${ZLIB_DIR}/xcframework/zlib.xcframework/ios-arm64/Headers" \
             -arch "${arch}" \
             -isysroot $(xcrun --sdk "${platform}" --show-sdk-path) \
             -fobjc-arc \
             -fmodules \
             -fobjc-abi-version=2 \
             -fobjc-runtime=ios-${MIN_IOS_VERSION} \
-            -mios-simulator-version-min=14 \
+            ${min_version_flag} \
             -std=c++17 \
             -stdlib=libc++ \
             -I$(xcrun --sdk "${platform}" --show-sdk-path)/usr/include/c++/v1
@@ -244,19 +276,50 @@ EOF
         local arch=$2
         local framework_dir=$3
 
-        # Handle devide and simulator paths
+        # Handle device and simulator paths
         if [ "$platform" == "iphoneos" ]; then
             sim_suffix=""
             libft_suffix=""
+            openssl_suffix=""
         else
+            # All dependencies likely use ios-arm64_x86_64-simulator when created by xcodebuild
+            # with fat libraries containing both arm64 and x86_64 architectures
             sim_suffix="_x86_64-simulator"
-            libft_suffix="_simulator"
+            openssl_suffix="_x86_64-simulator"
         fi
 
         # Combine all libraries into a single static library
         echo "Combining libraries for (${platform}/${arch})..."
-        echo "simsuffix: ${sim_suffix}"
-        echo "libft_suffix: ${libft_suffix}"
+        echo "sim_suffix: ${sim_suffix}"
+        echo "openssl_suffix: ${openssl_suffix}"
+        
+        # Debug: Check what XCFramework directories actually exist
+        echo "Debug: Available FreeType XCFramework directories:"
+        ls -la "${FREETYPE_DIR}/xcframework/FreeType.xcframework/" || echo "FreeType XCFramework not found"
+        
+        if [ "$platform" == "iphonesimulator" ]; then
+            echo "Debug: Contents of FreeType simulator directory:"
+            ls -la "${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64_x86_64-simulator/" || echo "Simulator directory not accessible"
+        fi
+        
+        # Try to find the correct FreeType library path
+        if [ "$platform" == "iphonesimulator" ]; then
+            # FreeType uses different library names: libfreetype_simulator.a for simulator
+            if [ -f "${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64_x86_64-simulator/libfreetype_simulator.a" ]; then
+                freetype_lib="${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64_x86_64-simulator/libfreetype_simulator.a"
+            elif [ -f "${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64_x86_64-simulator/libfreetype.a" ]; then
+                freetype_lib="${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64_x86_64-simulator/libfreetype.a"
+            elif [ -f "${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64-simulator/libfreetype.a" ]; then
+                freetype_lib="${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64-simulator/libfreetype.a"
+            else
+                echo "Error: Could not find FreeType simulator library"
+                exit 1
+            fi
+        else
+            freetype_lib="${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-arm64/libfreetype.a"
+        fi
+        
+        echo "Using FreeType library: ${freetype_lib}"
 
         libtool -static -o "${framework_dir}/PoDoFo" \
             "${INSTALL_DIR}/${platform}-${arch}/lib/libpodofo.a" \
@@ -264,9 +327,9 @@ EOF
             "${INSTALL_DIR}/${platform}-${arch}/lib/libpodofo_3rdparty.a" \
             "${INSTALL_DIR}/${platform}-${arch}/PodofoWrapper.o" \
             "${ZLIB_DIR}/xcframework/zlib.xcframework/ios-${arch}${sim_suffix}/libz.a" \
-            "${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-${arch}${sim_suffix}/libssl.a" \
-            "${OPENSSL_DIR}/xcframework/Crypto.xcframework/ios-${arch}${sim_suffix}/libcrypto.a" \
-            "${FREETYPE_DIR}/xcframework/FreeType.xcframework/ios-${arch}${sim_suffix}/libfreetype${libft_suffix}.a" \
+            "${OPENSSL_DIR}/xcframework/SSL.xcframework/ios-${arch}${openssl_suffix}/libssl.a" \
+            "${OPENSSL_DIR}/xcframework/Crypto.xcframework/ios-${arch}${openssl_suffix}/libcrypto.a" \
+            "${freetype_lib}" \
             "${LIBPNG_DIR}/xcframework/libpng.xcframework/ios-${arch}${sim_suffix}/libpng16.a" \
             "${LIBXML2_DIR}/xcframework/libxml2.xcframework/ios-${arch}${sim_suffix}/libxml2.framework/libxml2"
     }
