@@ -19,7 +19,7 @@ done
 # Configuration
 TARGET_DIR="$1"
 OPENSSL_VERSION="$2"
-MIN_IOS_VERSION="14.0"
+MIN_IOS_VERSION="16.0"
 
 # Convert TARGET_DIR to absolute path
 TARGET_DIR="$(cd "$(dirname "$TARGET_DIR")" && pwd)/$(basename "$TARGET_DIR")"
