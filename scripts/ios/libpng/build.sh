@@ -35,7 +35,7 @@ TEMP_DIR="$TARGET_DIR/temp"
 FAT_DIR="$TARGET_DIR/fat"
 
 # Configuration
-MIN_IOS_VERSION="14.0"
+MIN_IOS_VERSION="16.0"
 
 # Source files directory
 SRC_DIR=$(pwd)
