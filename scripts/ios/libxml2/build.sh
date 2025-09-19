@@ -68,7 +68,7 @@ function build() {
     DEVELOPER=$(xcode-select -print-path)
     IPHONEOS_SDK_VERSION=$(xcrun -sdk iphoneos --show-sdk-version)
     IPHONESIMULATOR_SDK_VERSION=$(xcrun -sdk iphonesimulator --show-sdk-version)
-    IPHONEOS_DEPLOYMENT_TARGET="16.0"
+    IPHONEOS_DEPLOYMENT_TARGET="14.0"
     FRAMEWORK_NAME="libxml2"
 
     # Function to build for a specific architecture

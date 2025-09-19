@@ -18,7 +18,7 @@ LIBPNG_DIR="$3"
 LIBXML2_DIR="$4"
 OPENSSL_DIR="$5"
 ZLIB_DIR="$6"
-MIN_IOS_VERSION="16"
+MIN_IOS_VERSION="14"
 
 # Define architectures and platforms
 DEVICE_ARCHS="arm64"
@@ -193,42 +193,36 @@ EOF
         build_for_platform_arch "iphonesimulator" "$arch"
     done
 
-    # Create XCFramework structure
-    echo "Creating XCFramework structure..."
+    # Create XCFramework preparation structure
+    echo "Creating XCFramework preparation structure..."
 
-    # Create framework directories with proper structure
-    DEVICE_FRAMEWORK_DIR="${FRAMEWORK_DIR}/PoDoFo.xcframework/ios-arm64/PoDoFo.framework"
-    SIMULATOR_FRAMEWORK_DIR="${FRAMEWORK_DIR}/PoDoFo.xcframework/ios-arm64-simulator/PoDoFo.framework"
-
-    # Make framework folders
-    mkdir -p "${DEVICE_FRAMEWORK_DIR}/Headers" "${SIMULATOR_FRAMEWORK_DIR}/Headers"
+    # Create framework preparation directories with proper structure
+    DEVICE_PREPARE_FRAMEWORK_DIR="${FRAMEWORK_DIR}/prepare_xcframework/ios"
+    SIMULATOR_PREPARE_FRAMEWORK_DIR="${FRAMEWORK_DIR}/prepare_xcframework/simulator"
 
     createModuleMapFile() {
         local framework_dir=$1
 
-        mkdir -p "${framework_dir}/Modules"
-        cat > "${framework_dir}/Modules/module.modulemap" << EOF
-framework module PoDoFo {
-    umbrella header "PodofoWrapper.h"
-    explicit module Base {
-        header "PodofoWrapper.h"
-        export *
-    }
-    export *
-    link "c++"
-    link "c++abi"
+        mkdir -p "${framework_dir}/include"
+
+        cat > "${framework_dir}/include/module.modulemap" << EOF
+module PoDoFo {
+  header "PodofoWrapper.h"
+  export *
+  link "c++"
+  link "c++abi"
 }
 EOF
     }
 
-    createModuleMapFile "$DEVICE_FRAMEWORK_DIR"
-    createModuleMapFile "$SIMULATOR_FRAMEWORK_DIR"
+    createModuleMapFile "$DEVICE_PREPARE_FRAMEWORK_DIR"
+    createModuleMapFile "$SIMULATOR_PREPARE_FRAMEWORK_DIR"
 
     # Copy headers and libraries
-    cp -R "${INSTALL_DIR}/iphoneos-arm64/include/podofo/" "${DEVICE_FRAMEWORK_DIR}/Headers/"
-    cp -R "${INSTALL_DIR}/iphonesimulator-arm64/include/podofo/" "${SIMULATOR_FRAMEWORK_DIR}/Headers/"
-    cp -R "${INSTALL_DIR}/iphoneos-arm64/include/openssl" "${DEVICE_FRAMEWORK_DIR}/Headers/"
-    cp -R "${INSTALL_DIR}/iphonesimulator-arm64/include/openssl" "${SIMULATOR_FRAMEWORK_DIR}/Headers/"
+    cp -R "${INSTALL_DIR}/iphoneos-arm64/include/podofo/" "${DEVICE_PREPARE_FRAMEWORK_DIR}/include/"
+    cp -R "${INSTALL_DIR}/iphonesimulator-arm64/include/podofo/" "${SIMULATOR_PREPARE_FRAMEWORK_DIR}/include/"
+    cp -R "${INSTALL_DIR}/iphoneos-arm64/include/openssl" "${DEVICE_PREPARE_FRAMEWORK_DIR}/include/"
+    cp -R "${INSTALL_DIR}/iphonesimulator-arm64/include/openssl" "${SIMULATOR_PREPARE_FRAMEWORK_DIR}/include/"
 
     compilePodofoWrapper() {
         local platform=$1
@@ -268,8 +262,8 @@ EOF
     compilePodofoWrapper "iphonesimulator" "arm64" "-simulator"
 
     # Copy PodofoWrapper header to framework
-    cp "${SOURCE_DIR}/scripts/ios/podofo/PodofoWrapper.h" "${DEVICE_FRAMEWORK_DIR}/Headers/"
-    cp "${SOURCE_DIR}/scripts/ios/podofo/PodofoWrapper.h" "${SIMULATOR_FRAMEWORK_DIR}/Headers/"
+    cp "${SOURCE_DIR}/scripts/ios/podofo/PodofoWrapper.h" "${DEVICE_PREPARE_FRAMEWORK_DIR}/include/"
+    cp "${SOURCE_DIR}/scripts/ios/podofo/PodofoWrapper.h" "${SIMULATOR_PREPARE_FRAMEWORK_DIR}/include/"
 
     combineDependenciesInPoDoFo() {
         local platform=$1
@@ -321,7 +315,7 @@ EOF
         
         echo "Using FreeType library: ${freetype_lib}"
 
-        libtool -static -o "${framework_dir}/PoDoFo" \
+        libtool -static -o "${framework_dir}/PoDoFo.a" \
             "${INSTALL_DIR}/${platform}-${arch}/lib/libpodofo.a" \
             "${INSTALL_DIR}/${platform}-${arch}/lib/libpodofo_private.a" \
             "${INSTALL_DIR}/${platform}-${arch}/lib/libpodofo_3rdparty.a" \
@@ -334,93 +328,17 @@ EOF
             "${LIBXML2_DIR}/xcframework/libxml2.xcframework/ios-${arch}${sim_suffix}/libxml2.framework/libxml2"
     }
 
-    combineDependenciesInPoDoFo "iphoneos" "arm64" "${DEVICE_FRAMEWORK_DIR}"
-    combineDependenciesInPoDoFo "iphonesimulator" "arm64" "${SIMULATOR_FRAMEWORK_DIR}"
+    combineDependenciesInPoDoFo "iphoneos" "arm64" "${DEVICE_PREPARE_FRAMEWORK_DIR}"
+    combineDependenciesInPoDoFo "iphonesimulator" "arm64" "${SIMULATOR_PREPARE_FRAMEWORK_DIR}"
 
+    # Create final xcframework
+    xcodebuild -create-xcframework \
+      -library "${DEVICE_PREPARE_FRAMEWORK_DIR}/PoDoFo.a" -headers "${DEVICE_PREPARE_FRAMEWORK_DIR}/include" \
+      -library "${SIMULATOR_PREPARE_FRAMEWORK_DIR}/PoDoFo.a" -headers "${SIMULATOR_PREPARE_FRAMEWORK_DIR}/include" \
+      -output "${FRAMEWORK_DIR}/PoDoFo.xcframework"
 
-    createInnerInfoPlistFile() {
-        local framework_dir=$1
-
-        # Create Info.plist files
-        cat > "${framework_dir}/Info.plist" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
-    <key>CFBundleExecutable</key>
-    <string>PoDoFo</string>
-    <key>CFBundleIdentifier</key>
-    <string>org.podofo.PoDoFo</string>
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-    <key>CFBundleName</key>
-    <string>PoDoFo</string>
-    <key>CFBundlePackageType</key>
-    <string>FMWK</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-    <key>CFBundleVersion</key>
-    <string>1</string>
-    <key>MinimumOSVersion</key>
-    <string>${MIN_IOS_VERSION}</string>
-</dict>
-</plist>
-EOF
-    }
-
-    createInnerInfoPlistFile "${DEVICE_FRAMEWORK_DIR}"
-    createInnerInfoPlistFile "${SIMULATOR_FRAMEWORK_DIR}"
-
-    # Create Main XCFramework Info.plist
-    cat > "${FRAMEWORK_DIR}/PoDoFo.xcframework/Info.plist" << EOF
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>AvailableLibraries</key>
-    <array>
-        <dict>
-            <key>LibraryIdentifier</key>
-            <string>ios-arm64</string>
-            <key>LibraryPath</key>
-            <string>PoDoFo.framework</string>
-            <key>SupportedArchitectures</key>
-            <array>
-                <string>arm64</string>
-            </array>
-            <key>SupportedPlatform</key>
-            <string>ios</string>
-        </dict>
-        <dict>
-            <key>LibraryIdentifier</key>
-            <string>ios-arm64-simulator</string>
-            <key>LibraryPath</key>
-            <string>PoDoFo.framework</string>
-            <key>SupportedArchitectures</key>
-            <array>
-                <string>arm64</string>
-            </array>
-            <key>SupportedPlatform</key>
-            <string>ios</string>
-            <key>SupportedPlatformVariant</key>
-            <string>simulator</string>
-        </dict>
-    </array>
-    <key>CFBundlePackageType</key>
-    <string>XFWK</string>
-    <key>XCFrameworkFormatVersion</key>
-    <string>1.0</string>
-    <key>CFBundleName</key>
-    <string>PoDoFo</string>
-    <key>CFBundleVersion</key>
-    <string>1.0</string>
-    <key>CFBundleShortVersionString</key>
-    <string>1.0</string>
-</dict>
-</plist>
-EOF
+    # Delete preparation folder
+    rm -rf "${FRAMEWORK_DIR}/prepare_xcframework"
 
     echo "XCFramework created at: ${FRAMEWORK_DIR}/PoDoFo.xcframework"
 }
